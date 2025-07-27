@@ -1,0 +1,19 @@
+# Unity generated
+[Ll]ibrary/
+[Tt]emp/
+[Oo]bj/
+[Bb]uild/
+[Bb]uilds/
+[Ll]ogs/
+MemoryCaptures/
+
+# Visual Studio generated
+.vs/
+*.csproj
+*.sln
+*.user
+*.suo
+*.vcxproj
+*.pdb
+*.opendb
+.vscode/
