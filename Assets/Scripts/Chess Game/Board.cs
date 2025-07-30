@@ -3,6 +3,8 @@ using System.Collections;
 using System.Collections.Generic;
 using UnityEngine;
 
+
+
 [RequireComponent(typeof(SquareSelectorCreator))]
 public class Board : MonoBehaviour
 {
@@ -10,14 +12,25 @@ public class Board : MonoBehaviour
 
     [SerializeField] private Transform bottomLeftSquareTransform;
     [SerializeField] private float squareSize;
+    [SerializeField] private PromotionUI promotionUI;
 
-    private Piece[,] grid;
-    private Piece selectedPiece;
+    //private Piece[,] grid;
+    public Piece[,] grid = new Piece[8, 8];
+    public Vector2Int? enPassantSquare = null;
+
+    protected Piece selectedPiece;
     private ChessGameController chessController;
     private SquareSelectorCreator squareSelector;
+    public Piece lastMovedPiece;
+    private List<Piece> pieces = new List<Piece>();
+
+    public virtual void SelectPieceMoved(Vector2 coords) { }
+    public virtual void SetSelectedPiece(Vector2 coords) { }
 
 
-    private void Awake()
+
+
+    protected virtual void Awake()
     {
         squareSelector = GetComponent<SquareSelectorCreator>();
         CreateGrid();
@@ -56,23 +69,24 @@ public class Board : MonoBehaviour
             if (piece != null && selectedPiece == piece)
                 DeselectPiece();
             else if (piece != null && selectedPiece != piece && chessController.IsTeamTurnActive(piece.team))
-                SelectPiece(piece);
+                SelectPiece(coords);
             else if (selectedPiece.CanMoveTo(coords))
-                OnSelectedPieceMoved(coords, selectedPiece);
+                SelectPieceMoved(coords);
         }
         else
         {
             if (piece != null && chessController.IsTeamTurnActive(piece.team))
-                SelectPiece(piece);
+                SelectPiece(coords);
         }
     }
 
+    
 
-
-    private void SelectPiece(Piece piece)
+    private void SelectPiece(Vector2Int coords)
     {
+        Piece piece = GetPieceOnSquare(coords);
         chessController.RemoveMovesEnablingAttakOnPieceOfType<King>(piece);
-        selectedPiece = piece;
+        SetSelectedPiece(coords);
         List<Vector2Int> selection = selectedPiece.avaliableMoves;
         ShowSelectionSquares(selection);
     }
@@ -94,13 +108,31 @@ public class Board : MonoBehaviour
         selectedPiece = null;
         squareSelector.ClearSelection();
     }
-    private void OnSelectedPieceMoved(Vector2Int coords, Piece piece)
+    public virtual void OnSelectedPieceMoved(Vector2Int coords, Piece piece)
     {
+        bool isPromotionMove = (piece is Pawn) && IsPromotionSquare(coords, piece.team);
+
         TryToTakeOppositePiece(coords);
         UpdateBoardOnPieceMove(coords, piece.occupiedSquare, piece, null);
         selectedPiece.MovePiece(coords);
         DeselectPiece();
-        EndTurn();
+
+        if (!isPromotionMove)
+        {
+            EndTurn();
+        }
+    }
+
+    private bool IsPromotionSquare(Vector2Int coords, TeamColor team)
+    {
+        int promotionRank = team == TeamColor.White ? Board.BOARD_SIZE - 1 : 0;
+        return coords.y == promotionRank;
+    }
+
+    public virtual void OnSetSelectedPiece(Vector2Int coords)
+    {
+        Piece piece = GetPieceOnSquare(coords);
+        selectedPiece = piece;
     }
 
     private void EndTurn()
@@ -120,6 +152,8 @@ public class Board : MonoBehaviour
             return grid[coords.x, coords.y];
         return null;
     }
+
+
 
     public bool CheckIfCoordinatesAreOnBoard(Vector2Int coords)
     {
@@ -166,11 +200,34 @@ public class Board : MonoBehaviour
         }
     }
 
+    public void RemovePiece(Piece piece)
+    {
+        if (pieces.Contains(piece))
+        {
+            pieces.Remove(piece);
+            Destroy(piece.gameObject);
+        }
+    }
+
+    public void RemovePieceAtSquare(Vector2Int coords)
+    {
+        Piece piece = GetPieceOnSquare(coords);
+        if (piece != null)
+        {
+            TakePiece(piece);
+        }
+    }
+
+
+
 
     public void PromotePiece(Piece piece)
     {
-        TakePiece(piece);
-        chessController.CreatePieceAndInitialize(piece.occupiedSquare, piece.team, typeof(Queen));
+        chessController.HandlePromotion(piece, () =>
+        {
+            // This callback runs after promotion is complete
+            //EndTurn();
+        });
     }
 
     internal void OnGameRestarted()

@@ -45,5 +45,8 @@ public class BoardLayout : ScriptableObject
     {
         return boardSquares[index].teamColor;
     }
-
+    public PieceType GetSquarePieceTypeAtIndex(int index)
+    {
+        return boardSquares[index].pieceType;
+    }
 }

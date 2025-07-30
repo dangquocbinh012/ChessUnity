@@ -14,8 +14,9 @@ public abstract class Piece : MonoBehaviour
 	public TeamColor team { get; set; }
 	public bool hasMoved { get; private set; }
 	public List<Vector2Int> avaliableMoves;
+    public Vector2Int previousSquare { get; protected set; }
 
-	private IObjectTweener tweener;
+    private IObjectTweener tweener;
 
 	public abstract List<Vector2Int> SelectAvaliableSquares();
 
@@ -42,17 +43,17 @@ public abstract class Piece : MonoBehaviour
 		return avaliableMoves.Contains(coords);
 	}
 
-	public virtual void MovePiece(Vector2Int coords)
-	{
-		Vector3 targetPosition = board.CalculatePositionFromCoords(coords);
-		occupiedSquare = coords;
-		hasMoved = true;
-		tweener.MoveTo(transform, targetPosition);
-        
+    public virtual void MovePiece(Vector2Int coords)
+    {
+        previousSquare = occupiedSquare; // Save before move
+        Vector3 targetPosition = board.CalculatePositionFromCoords(coords);
+        occupiedSquare = coords;
+        hasMoved = true;
+        tweener.MoveTo(transform, targetPosition);
     }
 
 
-	protected void TryToAddMove(Vector2Int coords)
+    protected void TryToAddMove(Vector2Int coords)
 	{
 		avaliableMoves.Add(coords);
 	}

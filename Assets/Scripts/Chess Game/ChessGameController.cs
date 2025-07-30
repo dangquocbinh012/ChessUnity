@@ -7,7 +7,7 @@ using UnityEngine;
 [RequireComponent(typeof(PiecesCreator))]
 public class ChessGameController : MonoBehaviour
 {
-    private enum GameState
+    protected enum GameState
     {
         Init, Play, Finished
     }
@@ -15,24 +15,56 @@ public class ChessGameController : MonoBehaviour
     [SerializeField] private BoardLayout startingBoardLayout;
     [SerializeField] private Board board;
     [SerializeField] private ChessUIManager uiManager;
+    [SerializeField] private PromotionUI promotionUI;
+    private Piece pawnToPromote;
 
     private PiecesCreator pieceCreator;
-    private ChessPlayer whitePlayer;
-    private ChessPlayer blackPlayer;
-    private ChessPlayer activePlayer;
+    protected ChessPlayer whitePlayer;
+    protected ChessPlayer blackPlayer;
+    protected ChessPlayer activePlayer;
+    private CameraSetup cameraSetup;
 
-    private GameState state;
+    protected GameState state;
+    private static readonly Dictionary<PieceType, Type> pieceTypeMap = new Dictionary<PieceType, Type>
+{
+    { PieceType.Pawn, typeof(Pawn) },
+    { PieceType.Rook, typeof(Rook) },
+    { PieceType.Knight, typeof(Knight) },
+    { PieceType.Bishop, typeof(Bishop) },
+    { PieceType.Queen, typeof(Queen) },
+    { PieceType.King, typeof(King) }
+};
+
+    
+
+
+    public virtual void TryToStartCurrentGame() { }
+    public virtual bool CanPerformMove()
+    {
+        return IsGameInProgress(); 
+    }
 
     private void Awake()
     {
-        SetDependencies();
+        pieceCreator = GetComponent<PiecesCreator>();
+        board = FindAnyObjectByType<Board>();
+        uiManager = FindAnyObjectByType<ChessUIManager>();
+        cameraSetup = FindAnyObjectByType<CameraSetup>();
+
+        SetDependencies(cameraSetup, uiManager, board);
         CreatePlayers();
     }
 
-    private void SetDependencies()
+    public void SetDependencies(CameraSetup cameraSetup, ChessUIManager uiManager, Board board)
     {
-        pieceCreator = GetComponent<PiecesCreator>();
+        this.cameraSetup = cameraSetup;
+        this.uiManager = uiManager;
+        this.board = board;
+        this.pieceCreator = GetComponent<PiecesCreator>();
     }
+
+    
+
 
     private void CreatePlayers()
     {
@@ -42,20 +74,30 @@ public class ChessGameController : MonoBehaviour
 
     private void Start()
     {
+        if (pieceCreator == null)
+        {
+            Debug.LogError("PiecesCreator component is missing on ChessGameController!");
+            return;
+        }
+
         StartNewGame();
     }
 
-    private void StartNewGame()
+
+    public void StartNewGame()
     {
-        uiManager.HideUI();
+        //uiManager.HideUI();
         SetGameState(GameState.Init);
         board.SetDependencies(this);
         CreatePiecesFromLayout(startingBoardLayout);
         activePlayer = whitePlayer;
         GenerateAllPossiblePlayerMoves(activePlayer);
         SetGameState(GameState.Play);
+        
     }
-    private void SetGameState(GameState state)
+
+    
+    protected virtual void SetGameState(GameState state)
     {
         this.state = state;
     }
@@ -73,28 +115,46 @@ public class ChessGameController : MonoBehaviour
         {
             Vector2Int squareCoords = layout.GetSquareCoordsAtIndex(i);
             TeamColor team = layout.GetSquareTeamColorAtIndex(i);
-            string typeName = layout.GetSquarePieceNameAtIndex(i);
+            PieceType pieceType = layout.GetSquarePieceTypeAtIndex(i); 
 
-            Type type = Type.GetType(typeName);
+            Type type = GetPieceTypeFromEnum(pieceType);
             CreatePieceAndInitialize(squareCoords, team, type);
         }
+    }
+
+    private Type GetPieceTypeFromEnum(PieceType pieceType)
+    {
+        return pieceTypeMap[pieceType];
     }
 
 
 
     public void CreatePieceAndInitialize(Vector2Int squareCoords, TeamColor team, Type type)
     {
-        Piece newPiece = pieceCreator.CreatePiece(type).GetComponent<Piece>();
-        newPiece.SetData(squareCoords, team, board);
+        if (pieceCreator == null)
+        {
+            Debug.LogError("pieceCreator is null!");
+            return;
+        }
 
-        Material teamMaterial = pieceCreator.GetTeamMaterial(team);
-        newPiece.SetMaterial(teamMaterial);
+        GameObject pieceObj = pieceCreator.CreatePiece(type);
+        if (pieceObj == null)
+        {
+            Debug.LogError($"Failed to create piece of type {type}");
+            return;
+        }
 
-        board.SetPieceOnBoard(squareCoords, newPiece);
+        Piece newPiece = pieceObj.GetComponent<Piece>();
+        if (newPiece == null)
+        {
+            Debug.LogError($"Created GameObject does not have a Piece component: {pieceObj.name}");
+            return;
+        }
 
-        ChessPlayer currentPlayer = team == TeamColor.White ? whitePlayer : blackPlayer;
-        currentPlayer.AddPiece(newPiece);
+        // Proceed with initialization...
     }
+
+
 
     private void GenerateAllPossiblePlayerMoves(ChessPlayer player)
     {
@@ -108,6 +168,7 @@ public class ChessGameController : MonoBehaviour
 
     public void EndTurn()
     {
+        board.enPassantSquare = null;
         GenerateAllPossiblePlayerMoves(activePlayer);
         GenerateAllPossiblePlayerMoves(GetOpponentToPlayer(activePlayer));
         if (CheckIfGameIsFinished())
@@ -142,7 +203,7 @@ public class ChessGameController : MonoBehaviour
 
     private void EndGame()
     {
-        uiManager.OnGameFinished(activePlayer.team.ToString());
+        //uiManager.OnGameFinished(activePlayer.team.ToString());
         SetGameState(GameState.Finished);
     }
 
@@ -181,20 +242,33 @@ public class ChessGameController : MonoBehaviour
     {
         activePlayer.RemoveMovesEnablingAttakOnPieceOfType<T>(GetOpponentToPlayer(activePlayer), piece);
     }
-
-    public void TriggerPawnPromotion(TeamColor teamColor, Vector3 worldPosition, Action<GameObject> onPromoted)
+    public void HandlePromotion(Piece pawn, Action onPromotionComplete)
     {
-        PromotionUI.Instance.Show(type => {
-            GameObject piece = pieceCreator.CreatePiece(type);
-            piece.GetComponent<Piece>().team = teamColor;
-            piece.transform.position = worldPosition;
-
-            // Convert to board coords
-            Vector2Int coords = new Vector2Int(Mathf.RoundToInt(worldPosition.x), Mathf.RoundToInt(worldPosition.z));
-            board.SetPieceOnBoard(coords, piece.GetComponent<Piece>());
-
-            onPromoted?.Invoke(piece);
+        pawnToPromote = pawn;
+        promotionUI.ShowPromotionPanel(pawn.team, (pieceType) =>
+        {
+            PromotePawn(pieceType);
+            onPromotionComplete?.Invoke();
         });
     }
+
+    private void PromotePawn(Type pieceType)
+    {
+        if (pawnToPromote == null) return;
+
+        Vector2Int coords = pawnToPromote.occupiedSquare;
+        TeamColor team = pawnToPromote.team;
+
+        // Remove the pawn
+        OnPieceRemoved(pawnToPromote);
+        Destroy(pawnToPromote.gameObject);
+
+        // Create new piece
+        CreatePieceAndInitialize(coords, team, pieceType);
+
+        pawnToPromote = null;
+    }
+
+
 }
 

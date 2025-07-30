@@ -1,36 +1,42 @@
-using System;
 using UnityEngine;
 using UnityEngine.UI;
-
+using System;
 
 public class PromotionUI : MonoBehaviour
 {
-    public GameObject panel;
-    public Button queenButton, rookButton, bishopButton, knightButton;
+    [SerializeField] private GameObject promotionPanel;
+    [SerializeField] private Button queenButton;
+    [SerializeField] private Button rookButton;
+    [SerializeField] private Button bishopButton;
+    [SerializeField] private Button knightButton;
 
-    private Action<Type> onPieceSelected;
+    private Action<Type> onPromotionSelected;
 
-    public static PromotionUI Instance;
-
-    void Awake()
+    private void Awake()
     {
-        Instance = this;
-        panel.SetActive(false);
-        queenButton.onClick.AddListener(() => SelectPiece(typeof(Queen)));
-        rookButton.onClick.AddListener(() => SelectPiece(typeof(Rook)));
-        bishopButton.onClick.AddListener(() => SelectPiece(typeof(Bishop)));
-        knightButton.onClick.AddListener(() => SelectPiece(typeof(Knight)));
+        queenButton.onClick.AddListener(() => SelectPromotion(typeof(Queen)));
+        rookButton.onClick.AddListener(() => SelectPromotion(typeof(Rook)));
+        bishopButton.onClick.AddListener(() => SelectPromotion(typeof(Bishop)));
+        knightButton.onClick.AddListener(() => SelectPromotion(typeof(Knight)));
+
+        HidePromotionPanel();
     }
 
-    public void Show(Action<Type> callback)
+    public void ShowPromotionPanel(TeamColor team, Action<Type> callback)
     {
-        onPieceSelected = callback;
-        panel.SetActive(true);
+        // You could change button colors based on team here
+        onPromotionSelected = callback;
+        promotionPanel.SetActive(true);
     }
 
-    private void SelectPiece(Type pieceType)
+    public void HidePromotionPanel()
     {
-        panel.SetActive(false);
-        onPieceSelected?.Invoke(pieceType);
+        promotionPanel.SetActive(false);
+    }
+
+    private void SelectPromotion(Type pieceType)
+    {
+        onPromotionSelected?.Invoke(pieceType);
+        HidePromotionPanel();
     }
 }

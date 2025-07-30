@@ -15,19 +15,28 @@ public class PiecesCreator : MonoBehaviour
     {
         foreach (var piece in piecesPrefabs)
         {
-            nameToPieceDict.Add(piece.GetComponent<Piece>().GetType().ToString(), piece);
+            string key = piece.GetComponent<Piece>().GetType().Name; // Use simple name
+            nameToPieceDict.Add(key, piece);
         }
     }
 
+
     public GameObject CreatePiece(Type type)
     {
-        GameObject prefab = nameToPieceDict[type.ToString()];
-        if (prefab)
+        if (type == null)
         {
-            GameObject newPiece = Instantiate(prefab);
-            return newPiece;
+            Debug.LogError("CreatePiece called with null type.");
+            return null;
         }
-        return null;
+
+        string key = type.Name;
+        if (!nameToPieceDict.TryGetValue(key, out GameObject prefab))
+        {
+            Debug.LogError($"No prefab found for type: {key}");
+            return null;
+        }
+
+        return Instantiate(prefab);
     }
 
     public Material GetTeamMaterial(TeamColor team)
